@@ -1253,6 +1253,17 @@ describe('remaining branches', () => {
     expect(manager.getListSnapshot().items[0]).not.toHaveProperty('parentSessionId')
   })
 
+  it('marks a successful fork as content instead of a blank draft', async ({ mock, remote }) => {
+    const manager = makeManager(mock, remote)
+    onTestFinished(() => manager.dispose())
+    remote.session.fork.mockResolvedValueOnce(ok({ sessionId: S2 }))
+
+    await expect(manager.fork({ sessionId: S1 })).resolves.toEqual(ok({ sessionId: S2 }))
+
+    // List surfaces hide blank rows, and a fork's seed always ends at a completed turn.
+    expect(manager.getListSnapshot().items[0]).toMatchObject({ sessionId: S2, blank: false })
+  })
+
   it('reconciles a fork child published before workspace attachment fails', async ({ mock, remote }) => {
     remote.session.fork.mockResolvedValue(err(new RemoteError('session/workspace-attach-failed', 'forked but unattached', {
       sessionId: S2, workspaceId: 'w1',

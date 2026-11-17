@@ -65,6 +65,13 @@ type WorkspaceViewActions = {
     accountKeys: readonly string[],
     source: SessionOrderSource,
   ) => void
+  insertSessionOrderAfter: (
+    draft: WorkspaceViewState,
+    sessionId: string,
+    childId: string,
+    accountKeys: readonly string[],
+    source: SessionOrderSource,
+  ) => void
   setArchivedFilter: (draft: WorkspaceViewState, filter: ArchivedFilter) => void
 }
 
@@ -122,6 +129,19 @@ export function createWorkspaceViewStore(): EngineStoreHandle<WorkspaceViewState
         d.sessionOrderByAccount = Object.fromEntries(Object.entries(source.members).map(([key, members]) => {
           const order = reconcileManualOrder(members, d.sessionOrderByAccount[key], source.summaries, source.rowState)
           return [key, selected.has(key) ? [sessionId, ...order.filter(id => id !== sessionId)] : order]
+        }))
+      },
+      insertSessionOrderAfter: (d, sessionId, childId, accountKeys, source) => {
+        // Recency order already puts a new child first; only a saved manual
+        // order needs to be told where the child belongs.
+        if (d.orderBy !== 'manual') return
+        const seated = new Set(accountKeys)
+        d.sessionOrderByAccount = Object.fromEntries(Object.entries(source.members).map(([key, members]) => {
+          const order = reconcileManualOrder(members, d.sessionOrderByAccount[key], source.summaries, source.rowState)
+            .filter(id => id !== childId)
+          if (!seated.has(key)) return [key, order]
+          const after = order.indexOf(sessionId)
+          return [key, after < 0 ? [childId, ...order] : [...order.slice(0, after + 1), childId, ...order.slice(after + 1)]]
         }))
       },
       setArchivedFilter: (d, filter: ArchivedFilter) => { d.archivedFilter = filter },

@@ -59,7 +59,8 @@ export interface UiWorkspace {
     options?: Pick<StartSessionOptions, 'agentPreset'>,
   ): Promise<void>
   /**
-   * Fork a Session without changing the current selection.
+   * Fork a Session without changing the current selection. A saved manual order
+   * seats the child directly after its source instead of after the saved block.
    * @param sessionId - source Session.
    * @param onCreated - observer before the optional child-title update.
    * @param options - optional permission to start source migration; omission preserves the Host default.
@@ -189,7 +190,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     private readonly directoryPicker: ClientRemote['directoryPicker'],
     private readonly workspaces: IWorkspaces,
     private readonly sessions: ISessions,
-    private readonly view: Pick<WorkspaceViewStoreActions, 'pinSessionOrder'>,
+    private readonly view: Pick<WorkspaceViewStoreActions, 'pinSessionOrder' | 'insertSessionOrderAfter'>,
     private readonly notify: (toast: RowToast) => void,
   ) {
     super(ctx, 'uiWorkspace')
@@ -326,12 +327,38 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     onCreated?: (childId: SessionId) => void,
     options?: Pick<Parameters<ISessions['fork']>[0], 'allowMigration'>,
   ): Promise<SessionId> {
-    return this.sessions.fork({
+    const childId = await this.sessions.fork({
       sessionId,
       increaseTitle: true,
       ...onCreated === undefined ? {} : { onCreated },
       ...options?.allowMigration === undefined ? {} : { allowMigration: options.allowMigration },
     })
+    this.seatFork(sessionId, childId)
+    return childId
+  }
+
+  /**
+   * Seat a fork next to its source in a saved manual order.
+   *
+   * A fork deliberately keeps the current selection, so nothing else places the
+   * child: a manual order reconciles unsaved members after the whole saved block,
+   * which puts a new branch at the bottom of a long Workspace — off the rendered
+   * list until the reader switches to recency order or reloads.
+   * @param sessionId - the Session the branch was cut from.
+   * @param childId - the Session the Host created.
+   */
+  private seatFork(sessionId: SessionId, childId: SessionId): void {
+    const workspaces = this.workspaces.list.getSnapshot()
+    const list = this.sessions.list.getSnapshot()
+    this.view.insertSessionOrderAfter(
+      sessionId,
+      childId,
+      pinOrderAccounts(workspaces.items, sessionId),
+      pinOrderSource(workspaces.items, list, {
+        pinnedSessionIds: workspaces.pinnedSessionIds,
+        archivedSessionIds: workspaces.archivedSessionIds,
+      }),
+    )
   }
 
   startSession(workspaceId?: WorkspaceId, options?: StartSessionOptions): void {

@@ -528,10 +528,13 @@ export class SessionManager {
   /**
    * Contract session.fork; on success merge the child into summaries
    * immediately (same synchronous-addressability guarantee as create).
-   * Blankness starts provisionally true so the authoritative Host summary can
-   * preserve it or lower it after an exact cut before the first `turn/start`;
-   * the fork has no durable source relationship. A child published before Workspace
-   * attachment fails is also reconciled into the list.
+   * A successful fork is not blank for either boundary this client sends: the
+   * sidebar omits `atSeq` (the Host then cuts at the latest completed turn) and
+   * the message branch sends a closed turn's tail. List surfaces hide blank
+   * rows, so a provisional blank left a real branch invisible until reload.
+   * A child published before Workspace attachment failed keeps the provisional
+   * blank: the client never observed the accepted cut. The fork has no durable
+   * source relationship.
    * @param opts - source session, optional exact inclusive boundary seq, and permission to start migration.
    * @returns the fork result (the child session id).
    */
@@ -549,7 +552,7 @@ export class SessionManager {
       : workspaceAttachSessionId(result.error)
     if (childId !== undefined) {
       this.recordMutation({ kind: 'placeholder', summary: { agentAvailable: true,
-        sessionId: childId, updatedAt: Date.now(), running: false, blank: true,
+        sessionId: childId, updatedAt: Date.now(), running: false, blank: !result.ok,
         ...(source?.cwd !== undefined ? { cwd: source.cwd } : {}),
       } })
     }

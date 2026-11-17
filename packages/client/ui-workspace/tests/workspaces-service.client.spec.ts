@@ -608,6 +608,27 @@ describe('UiWorkspaceService', () => {
     expect(b.view.getSnapshot().sessionOrderByAccount.a).toEqual(['three', 'one', 'two'])
   })
 
+  it('seats a fork next to its source in a saved manual order', async () => {
+    const b = bench({
+      workspaces: workspaceState([workspace('a', [sid('source'), sid('older')])]),
+      sessions: sessionState([summary('source', { updatedAt: 2 }), summary('older', { updatedAt: 1 })]),
+    })
+    b.view.actions.setSessionOrder('a', ['source', 'older'], {})
+    await expect(b.uiWorkspace.forkSession(sid('source'))).resolves.toBe(sid('forked'))
+    expect(b.sessions.fork).toHaveBeenCalledExactlyOnceWith({ sessionId: sid('source'), increaseTitle: true })
+    expect(b.view.getSnapshot().sessionOrderByAccount.a).toEqual(['source', 'forked', 'older'])
+  })
+
+  it('leaves a recency order untouched when a fork lands', async () => {
+    const b = bench({
+      workspaces: workspaceState([workspace('a', [sid('source'), sid('older')])]),
+      sessions: sessionState([summary('source', { updatedAt: 2 }), summary('older', { updatedAt: 1 })]),
+    })
+    await b.uiWorkspace.forkSession(sid('source'))
+    expect(b.view.getSnapshot().orderBy).toBe('updated')
+    expect(b.view.getSnapshot().sessionOrderByAccount).toEqual({})
+  })
+
   it('keeps newer saved orders when a pending pin completes', async () => {
     const b = bench({
       workspaces: workspaceState([workspace('a', [sid('one'), sid('two'), sid('three')])]),
